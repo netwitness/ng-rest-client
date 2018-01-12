@@ -1,5 +1,5 @@
-# Written by Scott Moore (NetWitness/RSA) in Aug 2012 against NextGen v9.8
-# using Python 2.7
+# Written by Scott Moore (NetWitness/RSA) in Aug 2012 against NextGen v10.6
+# using Python 3.5
 #
 # The purpose of this program is to demonstrate how to interact with NextGen
 # using the RESTful API.  I hereby release this code into the public domain so
@@ -17,12 +17,13 @@
 #
 # Thanks and I hope you find this useful.
 
-from Tkinter import *
-import ttk
-import urllib2, urllib, sys
+from tkinter import *
+from tkinter import ttk
+from tkinter import filedialog
+import urllib, urllib.request, urllib.parse, sys
 import json
 import re
-
+import ssl
 
 response_data = bytearray()
 
@@ -192,6 +193,16 @@ def getMessageHelp(*args):
         print("Unexpected error: ", sys.exc_info()[0])
     
 
+def getMessageManPage(*args):
+    """This function takes the current value of pathname and message and displays help for it on the screen."""
+    try:
+        # request help on the current node (in the pathname text entry)
+        s = "m=" + message.get() + " force-content-type=text/plain op=manual"
+        res = submit(url.get(), pathname.get(), "help", s, username.get(), password.get())
+    except:
+        print("Unexpected error: ", sys.exc_info()[0])
+    
+
 def submit(url, pathname, message, parameters, username, password, headers=None, bin_data=None):
     """Submits a RESTful request to a NextGen service and returns the response"""
     try:
@@ -199,10 +210,13 @@ def submit(url, pathname, message, parameters, username, password, headers=None,
         global response_text
         global root
         global busy
-        
+		
         # maximum amount of text that will be displayed in the request/response text boxes
         max_length = 64 * 1024 * 1024
-   
+        
+        # don't verify any SSL certificates, not really a good idea, but this is just for testing purposes
+        ssl._create_default_https_context = ssl._create_unverified_context
+        
         busy.busy()
 
         sp = StringParams()
@@ -220,22 +234,22 @@ def submit(url, pathname, message, parameters, username, password, headers=None,
         request_text.delete("1.0", "end")
         response_text.delete("1.0", "end")
         
-        auth_handler = urllib2.HTTPBasicAuthHandler()
+        auth_handler = urllib.request.HTTPBasicAuthHandler()
         auth_handler.add_password(realm="NetWitness", uri=urlPath, user=username, passwd=password)
-        opener = urllib2.build_opener(auth_handler)
-        urllib2.install_opener(opener)
+        opener = urllib.request.build_opener(auth_handler)
+        urllib.request.install_opener(opener)
         
-        data = urllib.urlencode(sp.params)
+        data = urllib.parse.urlencode(sp.params)
         
         if bin_data != None:
-            req = urllib2.Request(urlPath + urlParamChar + data, bin_data)
+            req = urllib.request.Request(urlPath + urlParamChar + data, bin_data)
         elif post.get() == "POST":
             data = data.encode("utf-8")
-            req = urllib2.Request(urlPath, data)
+            req = urllib.request.Request(urlPath, data)
         else:
-            req = urllib2.Request(urlPath + urlParamChar + data)
+            req = urllib.request.Request(urlPath + urlParamChar + data)
         
-        request_text.insert("end", req.get_full_url)
+        request_text.insert("end", req.full_url)
         request_text.insert("end", "\n")
 		
         if headers != None:
@@ -246,11 +260,11 @@ def submit(url, pathname, message, parameters, username, password, headers=None,
             request_text.insert("end", name + ": " + value)
             request_text.insert("end", "\n")
         
-        if req.has_data():
+        if req.data != None:
             request_text.insert("end", "\n")
             request_text.insert("end", req.data[0:max_length])
 
-        response = urllib2.urlopen(req)
+        response = urllib.request.urlopen(req)
         res_data = response.read()
         
         # Uncomment the lines below if you want to see the HTTP headers returned
@@ -285,7 +299,7 @@ def submit(url, pathname, message, parameters, username, password, headers=None,
 
         # return original bytearray response
         return res_data
-    except urllib2.URLError as e:
+    except urllib.request.URLError as e:
         #global response_text
         if hasattr(e, 'reason'):
             response_text.insert("end", e.reason)
@@ -336,7 +350,7 @@ def savePayload(*args):
 
 
 root = Tk()
-root.title("NextGen REST Client Test App v1.0")
+root.title("NextGen REST Client Test App v1.1")
 
 # BusyManager is purely for displaying a watch cursor when the python script is busy
 # waiting for a response from NextGen
@@ -392,8 +406,11 @@ message = StringVar()
 message_combo = ttk.Combobox(mainframe, width=20, textvariable=message)
 message_combo.grid(column=6, row=3, sticky=(W, E), columnspan=1)
 
-get_message_help_button = ttk.Button(mainframe, text="Get Message Help", command=getMessageHelp)
+get_message_help_button = ttk.Button(mainframe, text="Help", command=getMessageHelp)
 get_message_help_button.grid(column=7, row=3, sticky=W)
+
+get_message_manual_button = ttk.Button(mainframe, text="Manual", command=getMessageManPage)
+get_message_manual_button.grid(column=8, row=3, sticky=W)
 
 # parameters row
 ttk.Label(mainframe, text="Parameters").grid(column=1, row=6, sticky=E)
@@ -578,7 +595,7 @@ be used to write the full HTTP response to a file.  For instance, use this
 button to write a pcap file after sending a command to /sdk/packets.
 
 For additional help or updates to this python script, please check
-the NetWitness Community at https://community.emc.com/go/netwitness
+the NetWitness Community at https://community.rsa.com/message/893120
 """
 
 response_text.insert("end", welcome)
